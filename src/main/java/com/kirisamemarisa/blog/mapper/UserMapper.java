@@ -11,8 +11,6 @@ public class UserMapper {
         user.setPassword(dto.getPassword());
         user.setNickname(dto.getNickname());
         user.setGender(dto.getGender());
-        user.setAvatar(dto.getAvatar());
-        user.setBackground(dto.getBackground());
         return user;
     }
 
@@ -30,8 +28,6 @@ public class UserMapper {
         //密码不返回给前端
         dto.setNickname(user.getNickname());
         dto.setGender(user.getGender());
-        dto.setAvatar(user.getAvatar());
-        dto.setBackground(user.getBackground());
         return dto;
     }
 }

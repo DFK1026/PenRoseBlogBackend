@@ -16,8 +16,8 @@ public class User {
     //用户名，唯一非空，5-15字符，仅数字、字母、下划线
     private String username;
 
-    @Column(nullable = false, length = 12)
-    //密码非空，8-12位，仅数字和字母
+    @Column(nullable = false, length = 150)
+    //密码非空，8-12位，仅数字和字母，加密后最长100字符
     private String password;
 
     @Column(length = 15)
@@ -27,14 +27,6 @@ public class User {
     @Column(length = 2)
     //性别，取值范围：男、女、保密
     private String gender;
-
-    @Column(length = 255)
-    //头像，图片或gif的URL
-    private String avatar;
-
-    @Column(length = 255)
-    //背景，图片/gif/视频的URL
-    private String background;
 
     // Getters、Setters方法
     public Long getId() { return id; }
@@ -51,8 +43,4 @@ public class User {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getGender() { return gender; }
     public void setGender(String gender) { this.gender = gender; }
-    public String getAvatar() { return avatar; }
-    public void setAvatar(String avatar) { this.avatar = avatar; }
-    public String getBackground() { return background; }
-    public void setBackground(String background) { this.background = background; }
 }
