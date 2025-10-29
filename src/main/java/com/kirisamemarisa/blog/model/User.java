@@ -1,0 +1,58 @@
+package com.kirisamemarisa.blog.model;
+
+import jakarta.persistence.*;
+
+
+@Entity
+@Table(name = "user")
+//用户表结构
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    //主键id自增
+    private Long id;
+
+    @Column(nullable = false, unique = true, length = 15)
+    //用户名，唯一非空，5-15字符，仅数字、字母、下划线
+    private String username;
+
+    @Column(nullable = false, length = 12)
+    //密码非空，8-12位，仅数字和字母
+    private String password;
+
+    @Column(length = 15)
+    //昵称，最长15个字符
+    private String nickname;
+
+    @Column(length = 2)
+    //性别，取值范围：男、女、保密
+    private String gender;
+
+    @Column(length = 255)
+    //头像，图片或gif的URL
+    private String avatar;
+
+    @Column(length = 255)
+    //背景，图片/gif/视频的URL
+    private String background;
+
+    // Getters、Setters方法
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) {
+        this.username = username;
+    }
+    public String getPassword() { return password; }
+    public void setPassword(String password) {
+        this.password = password; 
+    }
+    public String getNickname() { return nickname; }
+    public void setNickname(String nickname) { this.nickname = nickname; }
+    public String getGender() { return gender; }
+    public void setGender(String gender) { this.gender = gender; }
+    public String getAvatar() { return avatar; }
+    public void setAvatar(String avatar) { this.avatar = avatar; }
+    public String getBackground() { return background; }
+    public void setBackground(String background) { this.background = background; }
+}
