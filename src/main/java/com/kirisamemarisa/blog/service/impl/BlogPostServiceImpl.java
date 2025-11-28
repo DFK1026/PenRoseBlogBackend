@@ -71,7 +71,7 @@ import org.springframework.data.domain.Page;
     @Override
     @Transactional(readOnly = true)
     public BlogPostDTO getById(Long id) {
-        return blogPostRepository.findById(id).map(p -> blogPostMapper.toDTO(p)).orElse(null);
+        return blogPostRepository.findById(id).map(blogPostMapper::toDTO).orElse(null);
     }
 
     @Override
@@ -183,8 +183,21 @@ import org.springframework.data.domain.Page;
     @Override
     public PageResult<BlogPostDTO> pageList(int page, int size, Long currentUserId) {
         Page<BlogPost> blogPage = blogPostRepository.findAll(PageRequest.of(page, size));
-        List<BlogPostDTO> dtoList = blogPage.getContent().stream().map(post -> {
-            UserProfile profile = userProfileRepository.findById(post.getUser().getId()).orElse(null);
+        List<BlogPost> posts = blogPage.getContent();
+        // 批量获取所有 userId
+        List<Long> userIds = posts.stream()
+                .map(post -> post.getUser().getId())
+                .distinct()
+                .toList();
+        // 批量查找所有 UserProfile
+        List<UserProfile> profiles = userProfileRepository.findAllById(userIds);
+        // 构建 userId -> UserProfile 映射
+        java.util.Map<Long, UserProfile> profileMap = new java.util.HashMap<>();
+        for (UserProfile profile : profiles) {
+            profileMap.put(profile.getUser().getId(), profile);
+        }
+        List<BlogPostDTO> dtoList = posts.stream().map(post -> {
+            UserProfile profile = profileMap.get(post.getUser().getId());
             return blogPostMapper.toDTOWithProfile(post, profile);
         }).toList();
         return new PageResult<>(dtoList, blogPage.getTotalElements(), page, size);

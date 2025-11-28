@@ -17,14 +17,11 @@ import com.kirisamemarisa.blog.repository.UserProfileRepository;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.CommentService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class CommentServiceImpl implements CommentService {
@@ -67,6 +64,16 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public List<CommentDTO> listComments(Long blogPostId, Long currentUserId) {
         List<Comment> comments = commentRepository.findByBlogPostIdOrderByCreatedAtDesc(blogPostId);
+        // 批量获取所有 userId
+        List<Long> userIds = comments.stream()
+                .map(comment -> comment.getUser().getId())
+                .distinct()
+                .toList();
+        List<UserProfile> profiles = userProfileRepository.findAllById(userIds);
+        java.util.Map<Long, UserProfile> profileMap = new java.util.HashMap<>();
+        for (UserProfile profile : profiles) {
+            profileMap.put(profile.getUser().getId(), profile);
+        }
         return comments.stream().map(comment -> {
             CommentDTO dto = commentMapper.toDTO(comment);
             if (currentUserId != null) {
@@ -74,31 +81,42 @@ public class CommentServiceImpl implements CommentService {
             } else {
                 dto.setLikedByCurrentUser(false);
             }
-            // 补全nickname和avatarUrl
-            userProfileRepository.findById(comment.getUser().getId()).ifPresent(profile -> {
+            UserProfile profile = profileMap.get(comment.getUser().getId());
+            if (profile != null) {
                 dto.setNickname(profile.getNickname());
                 dto.setAvatarUrl(profile.getAvatarUrl());
-            });
+            }
             return dto;
-        }).collect(Collectors.toList());
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     @Override
     public PageResult<CommentDTO> pageComments(Long blogPostId, int page, int size, Long currentUserId) {
-        Page<Comment> commentPage = commentRepository.findByBlogPostIdOrderByCreatedAtDesc(blogPostId, PageRequest.of(page, size));
-        List<CommentDTO> dtoList = commentPage.getContent().stream().map(comment -> {
+        org.springframework.data.domain.Page<Comment> commentPage = commentRepository.findByBlogPostIdOrderByCreatedAtDesc(blogPostId, org.springframework.data.domain.PageRequest.of(page, size));
+        List<Comment> comments = commentPage.getContent();
+        List<Long> userIds = comments.stream()
+                .map(comment -> comment.getUser().getId())
+                .distinct()
+                .toList();
+        List<UserProfile> profiles = userProfileRepository.findAllById(userIds);
+        java.util.Map<Long, UserProfile> profileMap = new java.util.HashMap<>();
+        for (UserProfile profile : profiles) {
+            profileMap.put(profile.getUser().getId(), profile);
+        }
+        List<CommentDTO> dtoList = comments.stream().map(comment -> {
             CommentDTO dto = commentMapper.toDTO(comment);
             if (currentUserId != null) {
                 dto.setLikedByCurrentUser(commentLikeRepository.findByCommentIdAndUserId(comment.getId(), currentUserId).isPresent());
             } else {
                 dto.setLikedByCurrentUser(false);
             }
-            userProfileRepository.findById(comment.getUser().getId()).ifPresent(profile -> {
+            UserProfile profile = profileMap.get(comment.getUser().getId());
+            if (profile != null) {
                 dto.setNickname(profile.getNickname());
                 dto.setAvatarUrl(profile.getAvatarUrl());
-            });
+            }
             return dto;
-        }).toList();
+        }).collect(java.util.stream.Collectors.toList());
         return new PageResult<>(dtoList, commentPage.getTotalElements(), page, size);
     }
 
