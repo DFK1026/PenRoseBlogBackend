@@ -14,8 +14,6 @@ import java.util.Optional;
 import java.util.List;
 import com.kirisamemarisa.blog.dto.PageResult;
 import org.springframework.data.domain.Page;
-import java.util.Map;
-import java.util.HashMap;
 
 @Service public class BlogPostServiceImpl implements BlogPostService {
     private final BlogPostRepository blogPostRepository;
@@ -185,21 +183,8 @@ import java.util.HashMap;
     @Override
     public PageResult<BlogPostDTO> pageList(int page, int size, Long currentUserId) {
         Page<BlogPost> blogPage = blogPostRepository.findAll(PageRequest.of(page, size));
-        List<BlogPost> posts = blogPage.getContent();
-        // 批量获取所有 userId
-        List<Long> userIds = posts.stream()
-                .map(post -> post.getUser().getId())
-                .distinct()
-                .toList();
-        // 批量查找所有 UserProfile
-        List<UserProfile> profiles = userProfileRepository.findAllById(userIds);
-        // 构建 userId -> UserProfile 映射
-        Map<Long, UserProfile> profileMap = new HashMap<>();
-        for (UserProfile profile : profiles) {
-            profileMap.put(profile.getUser().getId(), profile);
-        }
-        List<BlogPostDTO> dtoList = posts.stream().map(post -> {
-            UserProfile profile = profileMap.get(post.getUser().getId());
+        List<BlogPostDTO> dtoList = blogPage.getContent().stream().map(post -> {
+            UserProfile profile = userProfileRepository.findById(post.getUser().getId()).orElse(null);
             return blogPostMapper.toDTOWithProfile(post, profile);
         }).toList();
         return new PageResult<>(dtoList, blogPage.getTotalElements(), page, size);
@@ -213,24 +198,11 @@ import java.util.HashMap;
     @Override
     public PageResult<CommentDTO> pageComments(Long blogPostId, int page, int size, Long currentUserId) {
         Page<Comment> commentPage = commentRepository.findByBlogPostIdOrderByCreatedAtDesc(blogPostId, PageRequest.of(page, size));
-        List<Comment> comments = commentPage.getContent();
-        // 批量获取所有 userId
-        List<Long> userIds = comments.stream()
-                .map(c -> c.getUser().getId())
-                .distinct()
-                .toList();
-        // 批量查找所有 UserProfile
-        List<UserProfile> profiles = userProfileRepository.findAllById(userIds);
-        // 构建 userId -> UserProfile 映射
-        Map<Long, UserProfile> profileMap = new HashMap<>();
-        for (UserProfile profile : profiles) {
-            profileMap.put(profile.getUser().getId(), profile);
-        }
-        List<CommentDTO> dtoList = comments.stream().map(c -> toCommentDTO(c, currentUserId, profileMap)).toList();
+        List<CommentDTO> dtoList = commentPage.getContent().stream().map(c -> toCommentDTO(c, currentUserId)).toList();
         return new PageResult<>(dtoList, commentPage.getTotalElements(), page, size);
     }
 
-    private CommentDTO toCommentDTO(Comment c, Long currentUserId, Map<Long, UserProfile> profileMap) {
+    private CommentDTO toCommentDTO(Comment c, Long currentUserId) {
         CommentDTO dto = new CommentDTO();
         dto.setId(c.getId());
         dto.setBlogPostId(c.getBlogPost().getId());
@@ -243,11 +215,10 @@ import java.util.HashMap;
                     commentLikeRepository.findByCommentIdAndUserId(c.getId(), currentUserId).isPresent()
             );
         }
-        UserProfile profile = profileMap.get(c.getUser().getId());
-        if (profile != null) {
-            dto.setNickname(profile.getNickname());
-            dto.setAvatarUrl(profile.getAvatarUrl());
-        }
+        userProfileRepository.findById(c.getUser().getId()).ifPresent(p -> {
+            dto.setNickname(p.getNickname());
+            dto.setAvatarUrl(p.getAvatarUrl());
+        });
         return dto;
     }
 
