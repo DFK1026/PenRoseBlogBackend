@@ -1,9 +1,14 @@
 package com.kirisamemarisa.blog.controller;
 
 import com.kirisamemarisa.blog.common.ApiResponse;
+import com.kirisamemarisa.blog.dto.UserSimpleDTO;
+import com.kirisamemarisa.blog.dto.PageResult;
+import com.kirisamemarisa.blog.mapper.UserSimpleMapper;
 import com.kirisamemarisa.blog.model.User;
+import com.kirisamemarisa.blog.model.UserProfile;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.FollowService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +55,9 @@ public class FollowController {
         if (me.getId().equals(targetId)) {
             return new ApiResponse<>(400, "不能关注自己", null);
         }
+        if (followService.isFollowing(me, target)) {
+            return new ApiResponse<>(200, "已关注，无需重复操作", null);
+        }
         followService.follow(me, target);
         return new ApiResponse<>(200, "关注成功", null);
     }
@@ -66,30 +74,47 @@ public class FollowController {
         if (target == null) {
             return new ApiResponse<>(404, "目标用户不存在", null);
         }
+        if (!followService.isFollowing(me, target)) {
+            return new ApiResponse<>(200, "未关注，无需取关", null);
+        }
         followService.unfollow(me, target);
         return new ApiResponse<>(200, "取关成功", null);
     }
 
     @GetMapping("/followers")
-    public ApiResponse<List<User>> followers(@RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
-                                             @AuthenticationPrincipal UserDetails principal) {
+    public ApiResponse<PageResult<UserSimpleDTO>> followers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
+            @AuthenticationPrincipal UserDetails principal) {
         User me = resolveCurrentUser(principal, headerUserId);
         if (me == null) {
             return new ApiResponse<>(401, "未认证", null);
         }
-        List<User> list = followService.listFollowers(me);
-        return new ApiResponse<>(200, "获取成功", list);
+        List<Object[]> list = followService.pageFollowers(me, PageRequest.of(page, size));
+        long total = followService.countFollowers(me);
+        List<UserSimpleDTO> dtoList = list.stream()
+                .map(arr -> UserSimpleMapper.INSTANCE.toDTO((User) arr[0], (UserProfile) arr[1]))
+                .toList();
+        return new ApiResponse<>(200, "获取成功", new PageResult<>(dtoList, total, page, size));
     }
 
     @GetMapping("/following")
-    public ApiResponse<List<User>> following(@RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
-                                             @AuthenticationPrincipal UserDetails principal) {
+    public ApiResponse<PageResult<UserSimpleDTO>> following(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
+            @AuthenticationPrincipal UserDetails principal) {
         User me = resolveCurrentUser(principal, headerUserId);
         if (me == null) {
             return new ApiResponse<>(401, "未认证", null);
         }
-        List<User> list = followService.listFollowing(me);
-        return new ApiResponse<>(200, "获取成功", list);
+        List<Object[]> list = followService.pageFollowing(me, PageRequest.of(page, size));
+        long total = followService.countFollowing(me);
+        List<UserSimpleDTO> dtoList = list.stream()
+                .map(arr -> UserSimpleMapper.INSTANCE.toDTO((User) arr[0], (UserProfile) arr[1]))
+                .toList();
+        return new ApiResponse<>(200, "获取成功", new PageResult<>(dtoList, total, page, size));
     }
 
     @GetMapping("/friends/{otherId}")

@@ -10,5 +10,5 @@ public interface UserService {
     LoginResponseDTO login(UserLoginDTO dto);
     UserProfileDTO getUserProfileDTO(Long userId);
     boolean updateUserProfile(Long userId, UserProfileDTO dto);
+    String getUsernameById(Long userId);
 }
-

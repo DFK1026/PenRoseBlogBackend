@@ -9,6 +9,8 @@ import com.kirisamemarisa.blog.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 
 @RestController
 @RequestMapping("/api/user")
@@ -43,7 +45,11 @@ public class UserController {
     // 更新用户个人信息
     @PutMapping("/profile/{userId}")
     public ApiResponse<Void> updateProfile(@PathVariable Long userId,
-                                           @RequestBody UserProfileDTO userProfileDTO) {
+                                           @RequestBody UserProfileDTO userProfileDTO,
+                                           @AuthenticationPrincipal UserDetails principal) {
+        if (principal == null || !principal.getUsername().equals(userService.getUsernameById(userId))) {
+            return new ApiResponse<>(403, "无权修改他人资料", null);
+        }
         boolean ok = userService.updateUserProfile(userId, userProfileDTO);
         return ok ? new ApiResponse<>(200, "更新成功", null)
                 : new ApiResponse<>(400, "更新失败", null);

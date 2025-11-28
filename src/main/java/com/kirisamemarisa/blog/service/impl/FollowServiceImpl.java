@@ -2,9 +2,11 @@ package com.kirisamemarisa.blog.service.impl;
 
 import com.kirisamemarisa.blog.model.Follow;
 import com.kirisamemarisa.blog.model.User;
+import com.kirisamemarisa.blog.model.UserProfile;
 import com.kirisamemarisa.blog.repository.FollowRepository;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.FollowService;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,5 +63,25 @@ public class FollowServiceImpl implements FollowService {
         return followRepository.findByFollower(user).stream()
                 .map(Follow::getFollowee)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Object[]> pageFollowers(User user, Pageable pageable) {
+        return followRepository.findFollowersWithProfile(user, pageable);
+    }
+
+    @Override
+    public List<Object[]> pageFollowing(User user, Pageable pageable) {
+        return followRepository.findFollowingWithProfile(user, pageable);
+    }
+
+    @Override
+    public long countFollowers(User user) {
+        return followRepository.countByFollowee(user);
+    }
+
+    @Override
+    public long countFollowing(User user) {
+        return followRepository.countByFollower(user);
     }
 }

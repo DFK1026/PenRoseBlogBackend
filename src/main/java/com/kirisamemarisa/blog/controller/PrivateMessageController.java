@@ -1,12 +1,14 @@
 package com.kirisamemarisa.blog.controller;
 
 import com.kirisamemarisa.blog.common.ApiResponse;
+import com.kirisamemarisa.blog.dto.PageResult;
 import com.kirisamemarisa.blog.dto.PrivateMessageDTO;
 import com.kirisamemarisa.blog.events.MessageEventPublisher;
 import com.kirisamemarisa.blog.model.PrivateMessage;
 import com.kirisamemarisa.blog.model.User;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.PrivateMessageService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -58,15 +60,27 @@ public class PrivateMessageController {
         return new ApiResponse<>(200, "OK", list);
     }
 
+    private ApiResponse<PageResult<PrivateMessageDTO>> buildConversation(User me, User other, int page, int size) {
+        List<PrivateMessageDTO> all = privateMessageService
+                .conversation(me, other)
+                .stream().map(this::toDTO).toList();
+        int from = Math.min(page * size, all.size());
+        int to = Math.min(from + size, all.size());
+        List<PrivateMessageDTO> pageList = all.subList(from, to);
+        return new ApiResponse<>(200, "OK", new PageResult<>(pageList, all.size(), page, size));
+    }
+
     @GetMapping("/conversation/{otherId}")
-    public ApiResponse<List<PrivateMessageDTO>> conversation(@PathVariable Long otherId,
+    public ApiResponse<PageResult<PrivateMessageDTO>> conversation(@PathVariable Long otherId,
+                                                             @RequestParam(defaultValue = "0") int page,
+                                                             @RequestParam(defaultValue = "20") int size,
                                                              @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
                                                              @AuthenticationPrincipal UserDetails principal) {
         User me = resolveCurrent(principal, headerUserId);
         if (me == null) return new ApiResponse<>(401, "未认证", null);
         User other = userRepository.findById(otherId).orElse(null);
         if (other == null) return new ApiResponse<>(404, "用户不存在", null);
-        return buildConversation(me, other);
+        return buildConversation(me, other, page, size);
     }
 
     @PostMapping("/text/{otherId}")

@@ -3,6 +3,7 @@ package com.kirisamemarisa.blog.service.impl;
 import com.kirisamemarisa.blog.common.ApiResponse;
 import com.kirisamemarisa.blog.dto.CommentCreateDTO;
 import com.kirisamemarisa.blog.dto.CommentDTO;
+import com.kirisamemarisa.blog.dto.PageResult;
 import com.kirisamemarisa.blog.mapper.CommentMapper;
 import com.kirisamemarisa.blog.model.BlogPost;
 import com.kirisamemarisa.blog.model.Comment;
@@ -16,6 +17,8 @@ import com.kirisamemarisa.blog.repository.UserProfileRepository;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.CommentService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,6 +81,25 @@ public class CommentServiceImpl implements CommentService {
             });
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResult<CommentDTO> pageComments(Long blogPostId, int page, int size, Long currentUserId) {
+        Page<Comment> commentPage = commentRepository.findByBlogPostIdOrderByCreatedAtDesc(blogPostId, PageRequest.of(page, size));
+        List<CommentDTO> dtoList = commentPage.getContent().stream().map(comment -> {
+            CommentDTO dto = commentMapper.toDTO(comment);
+            if (currentUserId != null) {
+                dto.setLikedByCurrentUser(commentLikeRepository.findByCommentIdAndUserId(comment.getId(), currentUserId).isPresent());
+            } else {
+                dto.setLikedByCurrentUser(false);
+            }
+            userProfileRepository.findById(comment.getUser().getId()).ifPresent(profile -> {
+                dto.setNickname(profile.getNickname());
+                dto.setAvatarUrl(profile.getAvatarUrl());
+            });
+            return dto;
+        }).toList();
+        return new PageResult<>(dtoList, commentPage.getTotalElements(), page, size);
     }
 
     @Override

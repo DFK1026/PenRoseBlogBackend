@@ -105,4 +105,10 @@ public class UserServiceImpl implements UserService {
         userProfileRepository.save(profile);
         return true;
     }
+
+    @Override
+    public String getUsernameById(Long userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId).map(User::getUsername).orElse(null);
+    }
 }

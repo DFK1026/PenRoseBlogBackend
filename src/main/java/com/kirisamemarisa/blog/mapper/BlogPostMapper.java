@@ -4,6 +4,7 @@ import com.kirisamemarisa.blog.dto.BlogPostCreateDTO;
 import com.kirisamemarisa.blog.dto.BlogPostDTO;
 import com.kirisamemarisa.blog.dto.BlogPostUpdateDTO;
 import com.kirisamemarisa.blog.model.BlogPost;
+import com.kirisamemarisa.blog.model.UserProfile;
 import org.mapstruct.*;
 
 @Mapper(componentModel = "spring")
@@ -28,6 +29,15 @@ public interface BlogPostMapper {
         @Mapping(target = "likedByCurrentUser", ignore = true)
     })
     BlogPostDTO toDTO(BlogPost entity);
+
+    default BlogPostDTO toDTOWithProfile(BlogPost entity, UserProfile profile) {
+        BlogPostDTO dto = toDTO(entity);
+        if (profile != null) {
+            dto.setAuthorNickname(profile.getNickname());
+            dto.setAuthorAvatarUrl(profile.getAvatarUrl());
+        }
+        return dto;
+    }
 
     @Mappings({
         @Mapping(target = "user", ignore = true),

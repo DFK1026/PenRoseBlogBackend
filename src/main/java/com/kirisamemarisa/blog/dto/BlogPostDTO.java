@@ -18,6 +18,8 @@ public class BlogPostDTO {
     private Boolean repost;
     private Long originalPostId;
     private Boolean likedByCurrentUser;
+    private String authorNickname;
+    private String authorAvatarUrl;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -49,4 +51,8 @@ public class BlogPostDTO {
     public void setOriginalPostId(Long originalPostId) { this.originalPostId = originalPostId; }
     public Boolean getLikedByCurrentUser() { return likedByCurrentUser; }
     public void setLikedByCurrentUser(Boolean likedByCurrentUser) { this.likedByCurrentUser = likedByCurrentUser; }
+    public String getAuthorNickname() { return authorNickname; }
+    public void setAuthorNickname(String authorNickname) { this.authorNickname = authorNickname; }
+    public String getAuthorAvatarUrl() { return authorAvatarUrl; }
+    public void setAuthorAvatarUrl(String authorAvatarUrl) { this.authorAvatarUrl = authorAvatarUrl; }
 }

@@ -32,11 +32,11 @@ public class BlogPostController {
     }
 
     @GetMapping
-    public ApiResponse<List<BlogPostDTO>> list(@RequestParam(defaultValue = "0") int page,
+    public ApiResponse<PageResult<BlogPostDTO>> list(@RequestParam(defaultValue = "0") int page,
                                   @RequestParam(defaultValue = "10") int size,
                                   @RequestParam(required = false) Long currentUserId) {
-        List<BlogPostDTO> list = blogPostService.list(page, size, currentUserId);
-        return new ApiResponse<>(200, "获取成功", list);
+        PageResult<BlogPostDTO> result = blogPostService.pageList(page, size, currentUserId);
+        return new ApiResponse<>(200, "获取成功", result);
     }
 
     @PostMapping("/{id}/like")
@@ -51,10 +51,12 @@ public class BlogPostController {
     }
 
     @GetMapping("/{id}/comments")
-    public ApiResponse<List<CommentDTO>> comments(@PathVariable Long id,
+    public ApiResponse<PageResult<CommentDTO>> comments(@PathVariable Long id,
+                                     @RequestParam(defaultValue = "0") int page,
+                                     @RequestParam(defaultValue = "10") int size,
                                      @RequestParam(required = false) Long currentUserId) {
-        List<CommentDTO> list = blogPostService.listComments(id, currentUserId);
-        return new ApiResponse<>(200, "获取成功", list);
+        PageResult<CommentDTO> result = blogPostService.pageComments(id, page, size, currentUserId);
+        return new ApiResponse<>(200, "获取成功", result);
     }
 
     @PostMapping("/comment/{id}/like")
