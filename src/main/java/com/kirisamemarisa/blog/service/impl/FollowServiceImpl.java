@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 
 import com.kirisamemarisa.blog.model.Follow;
 import com.kirisamemarisa.blog.model.User;
-import com.kirisamemarisa.blog.model.UserProfile;
 import com.kirisamemarisa.blog.repository.FollowRepository;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.FollowService;
@@ -26,6 +25,8 @@ public class FollowServiceImpl implements FollowService {
     public FollowServiceImpl(FollowRepository followRepository, UserRepository userRepository) {
         this.followRepository = followRepository;
         this.userRepository = userRepository;
+        logger.debug("FollowServiceImpl initialized with followRepository={} userRepository={}",
+                followRepository != null, userRepository != null);
     }
 
     @Override
@@ -35,7 +36,23 @@ public class FollowServiceImpl implements FollowService {
                     Follow f = new Follow();
                     f.setFollower(follower);
                     f.setFollowee(followee);
-                    return followRepository.save(f);
+                    Follow saved = null;
+                    try {
+                        saved = followRepository.save(f);
+                        followRepository.flush();
+                        logger.info("Created follow {} -> {} (id={})", follower.getId(), followee.getId(),
+                                saved.getId());
+                    } catch (Exception ex) {
+                        logger.error("Failed to save or flush follow {} -> {}: {}", follower.getId(), followee.getId(),
+                                ex.toString());
+                        throw new RuntimeException("关注操作失败: " + ex.getMessage(), ex);
+                    }
+                    if (saved == null || saved.getId() == null) {
+                        logger.error("Follow save returned null or id is null for {} -> {}", follower.getId(),
+                                followee.getId());
+                        throw new RuntimeException("关注操作失败: 未能保存记录");
+                    }
+                    return saved;
                 });
     }
 
@@ -88,4 +105,6 @@ public class FollowServiceImpl implements FollowService {
     public long countFollowing(User user) {
         return followRepository.countByFollower(user);
     }
+
+    // no-op: keep the logger used in constructor; remove unused helper method
 }

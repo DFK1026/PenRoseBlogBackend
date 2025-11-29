@@ -1,7 +1,6 @@
 package com.kirisamemarisa.blog.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+// logger not needed here
 import com.kirisamemarisa.blog.common.ApiResponse;
 import com.kirisamemarisa.blog.dto.PageResult;
 import com.kirisamemarisa.blog.dto.PrivateMessageDTO;
@@ -10,7 +9,14 @@ import com.kirisamemarisa.blog.model.PrivateMessage;
 import com.kirisamemarisa.blog.model.User;
 import com.kirisamemarisa.blog.repository.UserRepository;
 import com.kirisamemarisa.blog.service.PrivateMessageService;
-import org.springframework.data.domain.PageRequest;
+import com.kirisamemarisa.blog.repository.PrivateMessageRepository;
+import com.kirisamemarisa.blog.dto.ConversationSummaryDTO;
+import com.kirisamemarisa.blog.model.UserProfile;
+import com.kirisamemarisa.blog.repository.UserProfileRepository;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.Collections;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -24,18 +30,23 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/messages")
 public class PrivateMessageController {
-    private static final Logger logger = LoggerFactory.getLogger(PrivateMessageController.class);
-
+    // controller for private message endpoints
     private final UserRepository userRepository;
     private final PrivateMessageService privateMessageService;
+    private final PrivateMessageRepository privateMessageRepository;
     private final MessageEventPublisher publisher;
+    private final UserProfileRepository userProfileRepository;
 
     public PrivateMessageController(UserRepository userRepository,
             PrivateMessageService privateMessageService,
-            MessageEventPublisher publisher) {
+            PrivateMessageRepository privateMessageRepository,
+            MessageEventPublisher publisher,
+            UserProfileRepository userProfileRepository) {
         this.userRepository = userRepository;
         this.privateMessageService = privateMessageService;
+        this.privateMessageRepository = privateMessageRepository;
         this.publisher = publisher;
+        this.userProfileRepository = userProfileRepository;
     }
 
     private User resolveCurrent(UserDetails principal, Long headerUserId) {
@@ -55,14 +66,30 @@ public class PrivateMessageController {
         dto.setMediaUrl(msg.getMediaUrl());
         dto.setType(msg.getType());
         dto.setCreatedAt(msg.getCreatedAt());
+        // populate nicknames and avatar urls when available
+        Long sid = msg.getSender() != null ? msg.getSender().getId() : null;
+        Long rid = msg.getReceiver() != null ? msg.getReceiver().getId() : null;
+        if (sid != null) {
+            UserProfile sp = userProfileRepository.findById(sid).orElse(null);
+            if (sp != null) {
+                dto.setSenderNickname(sp.getNickname());
+                dto.setSenderAvatarUrl(sp.getAvatarUrl());
+            } else {
+                dto.setSenderNickname(msg.getSender() != null ? msg.getSender().getUsername() : "");
+                dto.setSenderAvatarUrl("");
+            }
+        }
+        if (rid != null) {
+            UserProfile rp = userProfileRepository.findById(rid).orElse(null);
+            if (rp != null) {
+                dto.setReceiverNickname(rp.getNickname());
+                dto.setReceiverAvatarUrl(rp.getAvatarUrl());
+            } else {
+                dto.setReceiverNickname(msg.getReceiver() != null ? msg.getReceiver().getUsername() : "");
+                dto.setReceiverAvatarUrl("");
+            }
+        }
         return dto;
-    }
-
-    private ApiResponse<List<PrivateMessageDTO>> buildConversation(User me, User other) {
-        List<PrivateMessageDTO> list = privateMessageService
-                .conversation(me, other)
-                .stream().map(this::toDTO).collect(Collectors.toList());
-        return new ApiResponse<>(200, "OK", list);
     }
 
     private ApiResponse<PageResult<PrivateMessageDTO>> buildConversation(User me, User other, int page, int size) {
@@ -88,6 +115,84 @@ public class PrivateMessageController {
         if (other == null)
             return new ApiResponse<>(404, "用户不存在", null);
         return buildConversation(me, other, page, size);
+    }
+
+    @GetMapping("/conversation/list")
+    public ApiResponse<PageResult<ConversationSummaryDTO>> listConversations(
+            @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
+            @AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails principal) {
+        User me = resolveCurrent(principal, headerUserId);
+        if (me == null)
+            return new ApiResponse<>(401, "未认证", null);
+
+        // Map otherId -> summary (LinkedHashMap to preserve insertion order)
+        Map<Long, ConversationSummaryDTO> map = new LinkedHashMap<>();
+
+        // Messages where I'm the sender (other = receiver)
+        // Use fetch-join version so receiver's fields are initialized
+        privateMessageRepository.findBySenderWithReceiverOrderByCreatedAtDesc(me).forEach(m -> {
+            User receiver = m.getReceiver();
+            Long otherId = receiver != null ? receiver.getId() : null;
+            if (otherId == null)
+                return;
+            ConversationSummaryDTO cur = map.get(otherId);
+            if (cur == null || m.getCreatedAt().isAfter(cur.getLastAt())) {
+                ConversationSummaryDTO s = new ConversationSummaryDTO();
+                s.setOtherId(otherId);
+                // use profile if present
+                com.kirisamemarisa.blog.model.UserProfile prof = userProfileRepository.findById(otherId).orElse(null);
+                if (prof != null) {
+                    s.setNickname(prof.getNickname());
+                    s.setAvatarUrl(prof.getAvatarUrl());
+                } else {
+                    s.setNickname(receiver.getUsername());
+                    s.setAvatarUrl("");
+                }
+                s.setLastMessage(choosePreview(m));
+                s.setLastAt(m.getCreatedAt());
+                map.put(otherId, s);
+            }
+        });
+
+        // Messages where I'm the receiver (other = sender)
+        privateMessageRepository.findByReceiverWithSenderOrderByCreatedAtDesc(me).forEach(m -> {
+            User sender = m.getSender();
+            Long otherId = sender != null ? sender.getId() : null;
+            if (otherId == null)
+                return;
+            ConversationSummaryDTO cur = map.get(otherId);
+            if (cur == null || m.getCreatedAt().isAfter(cur.getLastAt())) {
+                ConversationSummaryDTO s = new ConversationSummaryDTO();
+                s.setOtherId(otherId);
+                com.kirisamemarisa.blog.model.UserProfile prof2 = userProfileRepository.findById(otherId).orElse(null);
+                if (prof2 != null) {
+                    s.setNickname(prof2.getNickname());
+                    s.setAvatarUrl(prof2.getAvatarUrl());
+                } else {
+                    s.setNickname(sender.getUsername());
+                    s.setAvatarUrl("");
+                }
+                s.setLastMessage(choosePreview(m));
+                s.setLastAt(m.getCreatedAt());
+                map.put(otherId, s);
+            }
+        });
+
+        // Convert to list and sort by lastAt desc
+        java.util.List<ConversationSummaryDTO> list = new java.util.ArrayList<>(map.values());
+        Collections.sort(list, Comparator.comparing(ConversationSummaryDTO::getLastAt).reversed());
+        PageResult<ConversationSummaryDTO> page = new PageResult<>(list, list.size(), 0, list.size());
+        return new ApiResponse<>(200, "OK", page);
+    }
+
+    private String choosePreview(PrivateMessage m) {
+        if (m.getType() != null && m.getType() != PrivateMessage.MessageType.TEXT) {
+            return m.getType().name();
+        }
+        String t = m.getText();
+        if (t == null)
+            return "";
+        return t.length() > 40 ? t.substring(0, 40) + "..." : t;
     }
 
     @PostMapping("/text/{otherId}")

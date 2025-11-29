@@ -1,13 +1,14 @@
 package com.kirisamemarisa.blog.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+// removed unused logger imports
 import com.kirisamemarisa.blog.common.ApiResponse;
 import com.kirisamemarisa.blog.dto.PrivateMessageDTO;
 import com.kirisamemarisa.blog.events.MessageEventPublisher;
 import com.kirisamemarisa.blog.model.PrivateMessage;
 import com.kirisamemarisa.blog.model.User;
 import com.kirisamemarisa.blog.repository.UserRepository;
+import com.kirisamemarisa.blog.common.JwtUtil;
+import com.kirisamemarisa.blog.repository.UserProfileRepository;
 import com.kirisamemarisa.blog.service.PrivateMessageService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -23,25 +24,31 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/messages")
 public class PrivateMessageStreamController {
-    private static final Logger logger = LoggerFactory.getLogger(PrivateMessageStreamController.class);
-
     private final UserRepository userRepository;
     private final PrivateMessageService privateMessageService;
     private final MessageEventPublisher publisher;
+    private final UserProfileRepository userProfileRepository;
 
     public PrivateMessageStreamController(UserRepository userRepository,
             PrivateMessageService privateMessageService,
-            MessageEventPublisher publisher) {
+            MessageEventPublisher publisher,
+            UserProfileRepository userProfileRepository) {
         this.userRepository = userRepository;
         this.privateMessageService = privateMessageService;
         this.publisher = publisher;
+        this.userProfileRepository = userProfileRepository;
     }
 
-    private User resolveCurrent(UserDetails principal, Long headerUserId) {
+    private User resolveCurrent(UserDetails principal, Long headerUserId, String token) {
         if (principal != null)
             return userRepository.findByUsername(principal.getUsername());
         if (headerUserId != null)
             return userRepository.findById(headerUserId).orElse(null);
+        if (token != null && !token.isEmpty()) {
+            Long uid = JwtUtil.getUserIdFromToken(token);
+            if (uid != null)
+                return userRepository.findById(uid).orElse(null);
+        }
         return null;
     }
 
@@ -54,14 +61,38 @@ public class PrivateMessageStreamController {
         dto.setMediaUrl(msg.getMediaUrl());
         dto.setType(msg.getType());
         dto.setCreatedAt(msg.getCreatedAt());
+        // populate nicknames and avatar urls when available
+        Long sid = msg.getSender() != null ? msg.getSender().getId() : null;
+        Long rid = msg.getReceiver() != null ? msg.getReceiver().getId() : null;
+        if (sid != null) {
+            com.kirisamemarisa.blog.model.UserProfile sp = userProfileRepository.findById(sid).orElse(null);
+            if (sp != null) {
+                dto.setSenderNickname(sp.getNickname());
+                dto.setSenderAvatarUrl(sp.getAvatarUrl());
+            } else {
+                dto.setSenderNickname(msg.getSender() != null ? msg.getSender().getUsername() : "");
+                dto.setSenderAvatarUrl("");
+            }
+        }
+        if (rid != null) {
+            com.kirisamemarisa.blog.model.UserProfile rp = userProfileRepository.findById(rid).orElse(null);
+            if (rp != null) {
+                dto.setReceiverNickname(rp.getNickname());
+                dto.setReceiverAvatarUrl(rp.getAvatarUrl());
+            } else {
+                dto.setReceiverNickname(msg.getReceiver() != null ? msg.getReceiver().getUsername() : "");
+                dto.setReceiverAvatarUrl("");
+            }
+        }
         return dto;
     }
 
     @GetMapping("/stream/{otherId}")
     public SseEmitter stream(@PathVariable Long otherId,
             @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
+            @RequestParam(name = "token", required = false) String token,
             @AuthenticationPrincipal UserDetails principal) {
-        User me = resolveCurrent(principal, headerUserId);
+        User me = resolveCurrent(principal, headerUserId, token);
         if (me == null) {
             // 返回一个立即结束的 emitter（前端识别失败回退轮询）
             SseEmitter failed = new SseEmitter();

@@ -4,9 +4,13 @@ import com.kirisamemarisa.blog.dto.PrivateMessageDTO;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * 简单的会话级 SSE 推送管理。
@@ -15,12 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class MessageEventPublisher {
 
+    private static final Logger logger = LoggerFactory.getLogger(MessageEventPublisher.class);
     private final Map<String, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
     public SseEmitter subscribe(Long meId, Long otherId, List<PrivateMessageDTO> initial) {
         String key = key(meId, otherId);
         SseEmitter emitter = new SseEmitter(0L); // 不超时
-        emitters.computeIfAbsent(key, k -> Collections.synchronizedSet(new HashSet<>())).add(emitter);
+        emitters.computeIfAbsent(key, k -> new CopyOnWriteArraySet<>()).add(emitter);
         emitter.onCompletion(() -> remove(key, emitter));
         emitter.onTimeout(() -> remove(key, emitter));
         emitter.onError(e -> remove(key, emitter));
@@ -38,11 +43,13 @@ public class MessageEventPublisher {
         for (SseEmitter em : set) {
             try {
                 em.send(SseEmitter.event().name("update").data(conversation));
-            } catch (Exception e) {
+            } catch (IOException ioe) {
                 dead.add(em);
+            } catch (Exception e) {
+                logger.warn("Unexpected error broadcasting message for key {}: {}", key, e.toString());
             }
         }
-        dead.forEach(d -> remove(key, d));
+        for (SseEmitter d : dead) remove(key, d);
     }
 
     private void remove(String key, SseEmitter em) {

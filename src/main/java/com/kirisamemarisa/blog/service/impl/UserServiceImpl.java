@@ -53,6 +53,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void register(UserRegisterDTO dto) {
+        logger.debug("register called for username={}", dto != null ? dto.getUsername() : null);
         if (dto == null)
             throw new BusinessException("请求体为空");
         String username = dto.getUsername();
@@ -77,6 +78,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginResponseDTO login(UserLoginDTO dto) {
+        logger.debug("login attempt for username={}", dto != null ? dto.getUsername() : null);
         if (dto == null)
             throw new BusinessException("请求体为空");
         String username = dto.getUsername();
@@ -110,6 +112,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserProfileDTO getUserProfileDTO(Long userId) {
+        logger.debug("getUserProfileDTO userId={}", userId);
         if (userId == null)
             return null;
         Optional<UserProfile> opt = userProfileRepository.findById(userId);
@@ -118,6 +121,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean updateUserProfile(Long userId, UserProfileDTO dto) {
+        logger.debug("updateUserProfile userId={}", userId);
         if (userId == null || dto == null)
             return false;
         Optional<User> userOpt = userRepository.findById(userId);

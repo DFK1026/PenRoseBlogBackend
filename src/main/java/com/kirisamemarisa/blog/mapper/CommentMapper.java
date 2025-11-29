@@ -11,5 +11,6 @@ public interface CommentMapper {
     @Mapping(target = "userId", source = "user.id")
     @Mapping(target = "nickname", ignore = true)
     @Mapping(target = "avatarUrl", ignore = true)
+    @Mapping(target = "likedByCurrentUser", ignore = true)
     CommentDTO toDTO(Comment comment);
 }

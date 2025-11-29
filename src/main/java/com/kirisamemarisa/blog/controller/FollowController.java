@@ -6,6 +6,7 @@ import com.kirisamemarisa.blog.common.ApiResponse;
 import com.kirisamemarisa.blog.dto.UserSimpleDTO;
 import com.kirisamemarisa.blog.dto.PageResult;
 import com.kirisamemarisa.blog.mapper.UserSimpleMapper;
+import com.kirisamemarisa.blog.repository.UserProfileRepository;
 import com.kirisamemarisa.blog.model.User;
 import com.kirisamemarisa.blog.model.UserProfile;
 import com.kirisamemarisa.blog.repository.UserRepository;
@@ -27,10 +28,13 @@ public class FollowController {
 
     private final UserRepository userRepository;
     private final FollowService followService;
+    private final UserProfileRepository userProfileRepository;
 
-    public FollowController(UserRepository userRepository, FollowService followService) {
+    public FollowController(UserRepository userRepository, FollowService followService,
+            UserProfileRepository userProfileRepository) {
         this.userRepository = userRepository;
         this.followService = followService;
+        this.userProfileRepository = userProfileRepository;
     }
 
     private User resolveCurrentUser(UserDetails principal, Long headerUserId) {
@@ -134,5 +138,27 @@ public class FollowController {
         }
         boolean friends = followService.areFriends(me, other);
         return new ApiResponse<>(200, "OK", friends);
+    }
+
+    @GetMapping("/friends/list")
+    public ApiResponse<List<UserSimpleDTO>> friendsList(
+            @RequestHeader(name = "X-User-Id", required = false) Long headerUserId,
+            @AuthenticationPrincipal UserDetails principal) {
+        User me = resolveCurrentUser(principal, headerUserId);
+        if (me == null) {
+            return new ApiResponse<>(401, "未认证", null);
+        }
+        List<User> followers = followService.listFollowers(me);
+        List<User> following = followService.listFollowing(me);
+        // compute mutuals by id
+        java.util.Set<Long> followingIds = following.stream().map(User::getId).collect(java.util.stream.Collectors.toSet());
+        List<UserSimpleDTO> dtoList = followers.stream()
+                .filter(u -> followingIds.contains(u.getId()))
+                .map(u -> {
+                    com.kirisamemarisa.blog.model.UserProfile profile = userProfileRepository.findById(u.getId()).orElse(null);
+                    return UserSimpleMapper.INSTANCE.toDTO(u, profile);
+                })
+                .toList();
+        return new ApiResponse<>(200, "获取成功", dtoList);
     }
 }

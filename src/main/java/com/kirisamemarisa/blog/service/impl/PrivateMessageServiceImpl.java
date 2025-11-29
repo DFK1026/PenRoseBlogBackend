@@ -24,6 +24,7 @@ public class PrivateMessageServiceImpl implements PrivateMessageService {
     public PrivateMessageServiceImpl(PrivateMessageRepository messageRepository, FollowService followService) {
         this.messageRepository = messageRepository;
         this.followService = followService;
+        logger.debug("PrivateMessageServiceImpl initialized with messageRepository={} followService={}", messageRepository != null, followService != null);
     }
 
     @Override
@@ -64,10 +65,11 @@ public class PrivateMessageServiceImpl implements PrivateMessageService {
 
     @Override
     public List<PrivateMessage> conversation(User a, User b) {
-        List<PrivateMessage> ab = new ArrayList<>(messageRepository.findBySenderAndReceiverOrderByCreatedAtAsc(a, b));
-        List<PrivateMessage> ba = messageRepository.findBySenderAndReceiverOrderByCreatedAtAsc(b, a);
+        // use fetch-join queries so sender/receiver are initialized while the transaction/session is open
+        List<PrivateMessage> ab = new ArrayList<>(messageRepository.findBySenderAndReceiverWithParticipantsOrderByCreatedAtAsc(a, b));
+        List<PrivateMessage> ba = messageRepository.findBySenderAndReceiverWithParticipantsOrderByCreatedAtAsc(b, a);
         ab.addAll(ba);
-        ab.sort((m1, m2) -> m1.getCreatedAt().compareTo(m2.getCreatedAt()));
+        ab.sort(java.util.Comparator.comparing(PrivateMessage::getCreatedAt));
         return ab;
     }
 
@@ -78,6 +80,7 @@ public class PrivateMessageServiceImpl implements PrivateMessageService {
 
     @Override
     public boolean hasReplied(User sender, User receiver) {
-        return !messageRepository.findBySenderAndReceiverOrderByCreatedAtAsc(receiver, sender).isEmpty();
+        List<PrivateMessage> replies = messageRepository.findBySenderAndReceiverWithParticipantsOrderByCreatedAtAsc(receiver, sender);
+        return !replies.isEmpty();
     }
 }

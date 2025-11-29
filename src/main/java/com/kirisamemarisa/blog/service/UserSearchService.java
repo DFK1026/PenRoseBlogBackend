@@ -1,8 +1,6 @@
 package com.kirisamemarisa.blog.service;
 
 import java.util.List;
-import com.kirisamemarisa.blog.model.User;
-import com.kirisamemarisa.blog.model.UserProfile;
 
 public interface UserSearchService {
     /**
