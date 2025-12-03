@@ -83,24 +83,38 @@ public class PrivateMessageManageServiceImpl implements PrivateMessageManageServ
 
         // 找到所有与该消息相关的状态记录（包括发送方和接收方）
         List<PrivateMessageStatus> allStatus = statusRepository.findByMessage(message);
-        if (allStatus.isEmpty()) {
-            // 如之前未建立状态记录，则针对 sender & receiver 补一条
-            List<User> users = new ArrayList<>();
-            if (message.getSender() != null) users.add(message.getSender());
-            if (message.getReceiver() != null) users.add(message.getReceiver());
-            for (User u : users) {
-                PrivateMessageStatus s = new PrivateMessageStatus();
-                s.setMessage(message);
-                s.setUser(u);
-                s.setRecalled(true);
-                s.setDeletedForUser(false);
-                statusRepository.save(s);
-            }
-        } else {
+
+        // 统一：确保 sender/receiver 都有一条状态记录
+        User sender = message.getSender();
+        User receiver = message.getReceiver();
+
+        // 现有记录先全部标记撤回
+        if (!allStatus.isEmpty()) {
             for (PrivateMessageStatus s : allStatus) {
                 s.setRecalled(true);
             }
             statusRepository.saveAll(allStatus);
+        }
+
+        // 检查并为缺失的一方补记录（关键修复：即使已有部分记录，也要补齐另一方）
+        boolean hasSender = allStatus.stream().anyMatch(s -> s.getUser() != null && s.getUser().getId().equals(sender != null ? sender.getId() : null));
+        boolean hasReceiver = allStatus.stream().anyMatch(s -> s.getUser() != null && s.getUser().getId().equals(receiver != null ? receiver.getId() : null));
+
+        if (sender != null && !hasSender) {
+            PrivateMessageStatus s = new PrivateMessageStatus();
+            s.setMessage(message);
+            s.setUser(sender);
+            s.setRecalled(true);
+            s.setDeletedForUser(false);
+            statusRepository.save(s);
+        }
+        if (receiver != null && !hasReceiver) {
+            PrivateMessageStatus s = new PrivateMessageStatus();
+            s.setMessage(message);
+            s.setUser(receiver);
+            s.setRecalled(true);
+            s.setDeletedForUser(false);
+            statusRepository.save(s);
         }
 
         // 新增：撤回成功后广播会话更新（双方都能即时收到）
